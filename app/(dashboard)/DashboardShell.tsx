@@ -46,8 +46,21 @@ export default function DashboardShell({
     import("@/lib/supabase/client").then(({ createClient }) => {
       const supabase = createClient();
       supabase.auth.getUser().then(({ data }) => {
-        const saved = data.user?.user_metadata?.currency;
-        if (saved) setCurrency(saved);
+        const supabaseCurrency = data.user?.user_metadata?.currency;
+        if (supabaseCurrency) {
+          // Supabase has a saved currency — use it and sync to localStorage
+          setCurrency(supabaseCurrency);
+        } else {
+          // No Supabase value yet — read from localStorage and save it up
+          try {
+            const local = JSON.parse(localStorage.getItem("ll_ui") ?? "{}");
+            const localCurrency = local?.state?.currency;
+            if (localCurrency && localCurrency !== "USD") {
+              setCurrency(localCurrency);
+              supabase.auth.updateUser({ data: { currency: localCurrency } }).catch(() => {});
+            }
+          } catch {}
+        }
       }).catch(() => {});
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
