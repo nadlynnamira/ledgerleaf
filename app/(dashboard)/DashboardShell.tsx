@@ -28,7 +28,7 @@ export default function DashboardShell({
 }: {
   userName: string; userEmail: string; userId: string; avatarUrl?: string; isAdmin?: boolean; children: React.ReactNode;
 }) {
-  const { theme } = useUI();
+  const { theme, setCurrency } = useUI();
   const pathname = usePathname();
   const pageTitle = PAGE_TITLES[pathname] ?? "";
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -40,6 +40,18 @@ export default function DashboardShell({
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  // Restore currency from Supabase user_metadata on login
+  useEffect(() => {
+    import("@/lib/supabase/client").then(({ createClient }) => {
+      const supabase = createClient();
+      supabase.auth.getUser().then(({ data }) => {
+        const saved = data.user?.user_metadata?.currency;
+        if (saved) setCurrency(saved);
+      }).catch(() => {});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div id="pg-dash">

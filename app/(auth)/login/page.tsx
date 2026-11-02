@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,18 +22,26 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
+
+  // Restore saved email on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ll_remember_email");
+      if (saved) { setValue("email", saved); }
+    } catch {}
+  }, [setValue]);
 
   async function onSubmit(data: FormData) {
     setError(""); setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email: data.email, password: data.password });
     if (error) { setError(error.message); setLoading(false); return; }
-    if (!rememberMe) {
-      // Mark session as non-persistent using sessionStorage
-      try { sessionStorage.setItem("ll_no_persist", "1"); } catch {}
-    }
+    try {
+      if (rememberMe) { localStorage.setItem("ll_remember_email", data.email); }
+      else { localStorage.removeItem("ll_remember_email"); }
+    } catch {}
     router.push("/"); router.refresh();
   }
 

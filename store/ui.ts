@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Theme, Currency } from "@/types";
+import { createClient } from "@/lib/supabase/client";
 
 interface UIState {
   theme: Theme;
@@ -22,7 +23,14 @@ export const useUI = create<UIState>()(
         set({ theme });
         document.documentElement.setAttribute("data-theme", theme);
       },
-      setCurrency: (currency) => set({ currency }),
+      setCurrency: (currency) => {
+        set({ currency });
+        // Persist to Supabase so it survives across devices/browsers
+        try {
+          const supabase = createClient();
+          supabase.auth.updateUser({ data: { currency } }).catch(() => {});
+        } catch {}
+      },
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     }),
     { name: "ll_ui" }
