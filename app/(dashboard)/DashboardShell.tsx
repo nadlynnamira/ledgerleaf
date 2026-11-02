@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import { useUI } from "@/store/ui";
 import { getPastMonths } from "@/lib/utils";
 import Sidebar from "@/components/shared/Sidebar";
@@ -85,8 +86,22 @@ export default function DashboardShell({
             </div>
           </div>
           <nav style={{ padding: "10px 8px 0", flex: 1 }}>
-            {["Dashboard","Transactions","Bills & Subscriptions","Savings Goals","Reports","Categories & Tags","Accounts","Debts & Loans","Assets & Liabilities","Calendar","Profile"].map(label => (
-              <div key={label} className="nav-item" onClick={() => setDrawerOpen(false)}>{label}</div>
+            {[
+              { label: "Dashboard", href: "/" },
+              { label: "Transactions", href: "/transactions" },
+              { label: "Bills & Subscriptions", href: "/bills" },
+              { label: "Budget", href: "/budget" },
+              { label: "Savings Goals", href: "/savings" },
+              { label: "Reports", href: "/reports" },
+              { label: "Categories & Tags", href: "/categories" },
+              { label: "Accounts", href: "/accounts" },
+              { label: "Debts & Loans", href: "/debts" },
+              { label: "Assets & Liabilities", href: "/assets" },
+              { label: "Calendar", href: "/calendar" },
+              { label: "Profile", href: "/profile" },
+              ...(isAdmin ? [{ label: "License Keys", href: "/admin" }] : []),
+            ].map(item => (
+              <Link key={item.href} href={item.href} className="nav-item" onClick={() => setDrawerOpen(false)} style={{ display: "block", textDecoration: "none" }}>{item.label}</Link>
             ))}
           </nav>
         </div>
