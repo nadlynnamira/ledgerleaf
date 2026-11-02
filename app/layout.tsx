@@ -5,13 +5,6 @@ import "./app.css";
 export const metadata: Metadata = {
   title: "Ledgerleaf — Personal Finance Tracker",
   description: "Your personal finance tracker",
-  manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "Ledgerleaf",
-  },
-  themeColor: "#16a34a",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -23,7 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Ledgerleaf" />
-        <link rel="apple-touch-icon" href="/logo.png" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body>
         {children}
