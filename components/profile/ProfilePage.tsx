@@ -1,8 +1,8 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { User, Mail, Calendar, Shield, Key, LogOut, Save, X, Camera, Loader, CheckCircle } from "lucide-react";
+import { User, Mail, Calendar, Shield, Key, LogOut, Save, X, Camera, Loader, CheckCircle, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 
 type Props = {
   userId: string;
@@ -13,6 +13,214 @@ type Props = {
   activationCode?: string;
 };
 
+// ─── Crop Modal ────────────────────────────────────────────────────────────
+function CropModal({
+  src,
+  onCancel,
+  onCrop,
+}: {
+  src: string;
+  onCancel: () => void;
+  onCrop: (blob: Blob) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragStart = useRef({ mx: 0, my: 0, ox: 0, oy: 0 });
+  const [imgLoaded, setImgLoaded] = useState(false);
+
+  const SIZE = 280; // canvas/preview size in px
+  const OUTPUT = 400; // exported image size
+
+  // Load image
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      imgRef.current = img;
+      // Center image on load
+      const scale = Math.max(SIZE / img.width, SIZE / img.height);
+      setZoom(scale);
+      setOffset({ x: 0, y: 0 });
+      setImgLoaded(true);
+    };
+    img.src = src;
+  }, [src]);
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, SIZE, SIZE);
+
+    // Draw image centered with zoom + offset
+    const w = img.width * zoom;
+    const h = img.height * zoom;
+    const x = SIZE / 2 - w / 2 + offset.x;
+    const y = SIZE / 2 - h / 2 + offset.y;
+    ctx.drawImage(img, x, y, w, h);
+
+    // Dark vignette outside circle
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Circle border
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.8)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 1, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }, [zoom, offset]);
+
+  useEffect(() => { if (imgLoaded) draw(); }, [draw, imgLoaded]);
+
+  function onMouseDown(e: React.MouseEvent) {
+    setDragging(true);
+    dragStart.current = { mx: e.clientX, my: e.clientY, ox: offset.x, oy: offset.y };
+  }
+  function onMouseMove(e: React.MouseEvent) {
+    if (!dragging) return;
+    const dx = e.clientX - dragStart.current.mx;
+    const dy = e.clientY - dragStart.current.my;
+    setOffset({ x: dragStart.current.ox + dx, y: dragStart.current.oy + dy });
+  }
+  function onMouseUp() { setDragging(false); }
+
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    setDragging(true);
+    dragStart.current = { mx: t.clientX, my: t.clientY, ox: offset.x, oy: offset.y };
+  }
+  function onTouchMove(e: React.TouchEvent) {
+    if (!dragging) return;
+    const t = e.touches[0];
+    const dx = t.clientX - dragStart.current.mx;
+    const dy = t.clientY - dragStart.current.my;
+    setOffset({ x: dragStart.current.ox + dx, y: dragStart.current.oy + dy });
+  }
+
+  function handleCrop() {
+    const img = imgRef.current;
+    if (!img) return;
+
+    const out = document.createElement("canvas");
+    out.width = OUTPUT;
+    out.height = OUTPUT;
+    const ctx = out.getContext("2d");
+    if (!ctx) return;
+
+    // Circle clip
+    ctx.beginPath();
+    ctx.arc(OUTPUT / 2, OUTPUT / 2, OUTPUT / 2, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Scale offset from preview SIZE → OUTPUT
+    const scale = OUTPUT / SIZE;
+    const w = img.width * zoom * scale;
+    const h = img.height * zoom * scale;
+    const x = OUTPUT / 2 - w / 2 + offset.x * scale;
+    const y = OUTPUT / 2 - h / 2 + offset.y * scale;
+    ctx.drawImage(img, x, y, w, h);
+
+    out.toBlob(blob => { if (blob) onCrop(blob); }, "image/png", 0.95);
+  }
+
+  return (
+    <div className="modal-bg" style={{ zIndex: 700 }}>
+      <div className="modal" style={{ maxWidth: 380 }}>
+        <div className="modal-hdr">
+          <h3>Crop Photo</h3>
+          <button className="modal-close" onClick={onCancel}><X size={15} /></button>
+        </div>
+
+        <p style={{ fontSize: 12, color: "var(--t3)", marginBottom: 16 }}>
+          Drag to reposition · Use the slider to zoom in or out
+        </p>
+
+        {/* Canvas preview */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+          <canvas
+            ref={canvasRef}
+            width={SIZE}
+            height={SIZE}
+            style={{
+              borderRadius: "50%",
+              cursor: dragging ? "grabbing" : "grab",
+              display: "block",
+              touchAction: "none",
+              border: "2px solid var(--bdr)",
+            }}
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp}
+            onMouseLeave={onMouseUp}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onMouseUp}
+          />
+        </div>
+
+        {/* Zoom slider */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+          <button
+            onClick={() => setZoom(z => Math.max(0.5, z - 0.1))}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", display: "flex", padding: 4 }}
+          >
+            <ZoomOut size={16} />
+          </button>
+          <input
+            type="range"
+            min={0.5}
+            max={4}
+            step={0.05}
+            value={zoom}
+            onChange={e => setZoom(Number(e.target.value))}
+            style={{ flex: 1, accentColor: "var(--p)" }}
+          />
+          <button
+            onClick={() => setZoom(z => Math.min(4, z + 0.1))}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", display: "flex", padding: 4 }}
+          >
+            <ZoomIn size={16} />
+          </button>
+          <button
+            onClick={() => {
+              const img = imgRef.current;
+              if (!img) return;
+              setZoom(Math.max(SIZE / img.width, SIZE / img.height));
+              setOffset({ x: 0, y: 0 });
+            }}
+            title="Reset"
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", display: "flex", padding: 4 }}
+          >
+            <RotateCcw size={14} />
+          </button>
+        </div>
+
+        <div className="modal-ft">
+          <button className="btn-ghost" onClick={onCancel}>Cancel</button>
+          <button className="btn-add" onClick={handleCrop} style={{ margin: 0 }}>
+            <Camera size={13} /> Use This Photo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Profile Page ──────────────────────────────────────────────────────────
 export default function ProfilePage({ userId, userName, userEmail, createdAt, avatarUrl: initialAvatarUrl, activationCode }: Props) {
   const supabase = createClient();
   const router = useRouter();
@@ -32,6 +240,7 @@ export default function ProfilePage({ userId, userName, userEmail, createdAt, av
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl ?? "");
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const ini = name.charAt(0).toUpperCase();
@@ -57,17 +266,26 @@ export default function ProfilePage({ userId, userName, userEmail, createdAt, av
     setPwSaving(false);
   }
 
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { setAvatarError("Image must be under 2MB."); return; }
+    // Reset so same file can be re-selected
+    e.target.value = "";
+    if (file.size > 10 * 1024 * 1024) { setAvatarError("Image must be under 10MB."); return; }
     if (!file.type.startsWith("image/")) { setAvatarError("Please select an image file."); return; }
+    setAvatarError("");
+    const reader = new FileReader();
+    reader.onload = ev => { if (ev.target?.result) setCropSrc(ev.target.result as string); };
+    reader.readAsDataURL(file);
+  }
 
-    setAvatarUploading(true); setAvatarError("");
-    const ext = file.name.split(".").pop();
-    const path = `${userId}/avatar.${ext}`;
+  async function uploadCroppedBlob(blob: Blob) {
+    setCropSrc(null);
+    setAvatarUploading(true);
+    setAvatarError("");
 
-    const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+    const path = `${userId}/avatar.png`;
+    const { error: upErr } = await supabase.storage.from("avatars").upload(path, blob, { upsert: true, contentType: "image/png" });
     if (upErr) { setAvatarError(upErr.message); setAvatarUploading(false); return; }
 
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
@@ -88,6 +306,14 @@ export default function ProfilePage({ userId, userName, userEmail, createdAt, av
 
   return (
     <div>
+      {cropSrc && (
+        <CropModal
+          src={cropSrc}
+          onCancel={() => setCropSrc(null)}
+          onCrop={uploadCroppedBlob}
+        />
+      )}
+
       <div className="pg-hdr">
         <div>
           <h2 className="pg-h2">Profile</h2>
@@ -117,10 +343,11 @@ export default function ProfilePage({ userId, userName, userEmail, createdAt, av
               type="file"
               accept="image/*"
               style={{ display: "none" }}
-              onChange={handleAvatarChange}
+              onChange={handleFileChange}
             />
           </div>
           {avatarError && <div className="msg-err" style={{ fontSize: 11, marginTop: 6, textAlign: "center" }}>{avatarError}</div>}
+          {avatarUploading && <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 4 }}>Uploading…</div>}
           <div className="prof-page-name">{name}</div>
           <div className="prof-page-email">{userEmail}</div>
           <div className="prof-page-joined">Member since {joined}</div>
