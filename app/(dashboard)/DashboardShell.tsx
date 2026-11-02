@@ -6,6 +6,7 @@ import { getPastMonths } from "@/lib/utils";
 import Sidebar from "@/components/shared/Sidebar";
 import Topbar from "@/components/shared/Topbar";
 import SettingsModal from "@/components/shared/SettingsModal";
+import InstallPWA from "@/components/shared/InstallPWA";
 
 const PAGE_TITLES: Record<string, string> = {
   "/": "Dashboard",
@@ -109,6 +110,7 @@ export default function DashboardShell({
       </div>
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <InstallPWA />
     </div>
   );
 }
