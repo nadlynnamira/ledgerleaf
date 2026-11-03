@@ -121,6 +121,9 @@ export default function DashboardShell({
         />
         <div className="content">
           {children}
+          <footer style={{ textAlign: "center", fontSize: 11, color: "var(--t4)", paddingTop: 8, paddingBottom: 4, borderTop: "1px solid var(--bdr)", marginTop: 8 }}>
+            © 2026 Namyra. All Rights Reserved.
+          </footer>
         </div>
       </div>
 
